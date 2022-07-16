@@ -68,3 +68,37 @@ func (h *syncHandler) Set(handler Handler) {
 
 	h.Handler = handler
 }
+
+// TODO: using protobuf and auto generate
+type Brush func(string) string
+
+type colour = string
+
+var reset colour = "\033[0m"
+
+var colours = map[string]colour{
+	"Unknown": "\033[0m",    // White
+	"Error":   "\033[31m",   // Red
+	"Warning": "\033[33m",   // Yellow
+	"Info":    "\033[36m",   // Cyan
+	"Debug":   "\033[34m",   // Blue
+	"Custom":  "\033[1;33m", // Light Yellow
+}
+
+func NewBrush(i string) Brush {
+	return func(s string) string {
+		if len(s) == 0 {
+			return ""
+		}
+
+		var end = len(s)
+		if s[len(s)-1] == '\n' {
+			if len(s) >= 2 && s[len(s)-2] == '\r' { // windows CRLF
+				end = len(s) - 2
+			} else {
+				end = len(s) - 1
+			}
+		}
+		return colours[i] + s[:end] + reset + s[end:]
+	}
+}

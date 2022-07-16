@@ -4,6 +4,7 @@ package outbound
 
 import (
 	"context"
+	"log"
 	"strings"
 	"sync"
 
@@ -44,6 +45,7 @@ func (m *Manager) Start() error {
 	m.running = true
 
 	for _, h := range m.taggedHandler {
+		log.Printf("starting a taggedHandler: %v", h.Tag())
 		if err := h.Start(); err != nil {
 			return err
 		}
@@ -106,6 +108,7 @@ func (m *Manager) AddHandler(ctx context.Context, handler outbound.Handler) erro
 
 	if m.defaultHandler == nil ||
 		(len(tag) > 0 && tag == m.defaultHandler.Tag()) {
+		log.Printf("assign defaultHandler: %v", tag)
 		m.defaultHandler = handler
 	}
 
@@ -136,6 +139,7 @@ func (m *Manager) RemoveHandler(ctx context.Context, tag string) error {
 
 	delete(m.taggedHandler, tag)
 	if m.defaultHandler != nil && m.defaultHandler.Tag() == tag {
+		log.Println("assign defaultHandler to nil")
 		m.defaultHandler = nil
 	}
 

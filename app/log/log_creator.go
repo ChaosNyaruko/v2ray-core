@@ -32,6 +32,7 @@ func createHandler(logType LogType, options HandlerCreatorOptions) (log.Handler,
 
 func init() {
 	common.Must(RegisterHandlerCreator(LogType_Console, func(lt LogType, options HandlerCreatorOptions) (log.Handler, error) {
+		// console type here
 		return log.NewLogger(log.CreateStdoutLogWriter()), nil
 	}))
 

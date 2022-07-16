@@ -1,0 +1,244 @@
+{
+    "log": {},
+    "inbounds": [
+        {
+            "port": 20001,
+            "protocol": "socks",
+            "tag": "inbound:auto-switch-socks"
+        },
+        {
+            "port": 20002,
+            "protocol": "http",
+            "tag": "inbound:auto-switch-http"
+        },
+        {
+            "port": 20003,
+            "protocol": "socks",
+            "tag": "inbound:mockintag1"
+        },
+        {
+            "port": 20004,
+            "protocol": "http",
+            "tag": "inbound:mockintag2"
+        }
+    ],
+    "outbounds": [
+        /** 1. 没有匹配的出站规则时走第一个 outbound (`freedom`) **/
+        {
+            "tag": "direct",
+            "protocol": "freedom"
+        },
+        /**********************************************************/
+
+        /************** 2. LA(hostUS) 的各协议出站 ****************/
+        {
+            "protocol": "vless",
+            "tag": "outbound:mockouttag1",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "mockaddress",
+                        "port": 7777,
+                        "users": [
+                            {
+                                "id": "mock-uuid",
+                                "encryption": "none",
+                                "level": 0
+                            }
+                        ]
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls"
+            }
+        },
+		{
+          "protocol": "vmess", // 出口协议
+          "tag": "outbound:mockouttag2",
+          "settings": {
+            "vnext": [
+              {
+                "address": "mockaddress", // 服务器地址，请修改为你自己的服务器 IP 或域名
+                "port": 443,  // 服务器端口
+                "users": [
+                  {
+                    "id": "mockuuid",
+                    "alterId": 0 // 此处的值也应当与服务器相同
+                  }
+                ]
+              }
+            ]
+          },
+		  "streamSettings": {
+			"network": "ws",
+			"security": "tls",
+			"wsSettings": {
+			  "path": "/mockpath"
+			}
+		  }
+        },
+        /**********************************************************/
+
+        {
+            "tag": "blocked",
+            "protocol": "blackhole",
+            "settings": {
+                "response": {
+                    "type": "none"
+                }
+            }
+        }
+    ],
+    "routing": {
+        "rules": [
+            /******** 1. 按 Tag 匹配，优先级最高 *********/
+            {
+                "type": "field",
+                "inboundTag": [
+                    "inbound:mockintag1",
+                    "inbound:mockintag2"
+                ],
+                "outboundTag": "outbound:mockouttag1"
+            },
+            {
+                "type": "field",
+                "inboundTag": [
+                    "inbound:mockintag3",
+                    "inbound:mockintag4"
+                ],
+                "outboundTag": "outbound:mockouttag2"
+            },
+
+            // 负载均衡的 `leastPing` 策略经常抽风，会回落到第一个 outbound(direct)
+            // 抽风的话考虑修改 `leastPing` 为 `random`
+            // 或者明确指定 `outboundTag`
+
+            /****** 2. 按域名自定义出站，优先级次高 ******/
+            {
+                "domainMatcher": "mph",
+                "type": "field",
+                "domains": [
+                    "domain:baidu.com"
+                ],
+                "outboundTag": "direct"
+            },
+            {
+                "domainMatcher": "mph",
+                "type": "field",
+                "domains": [
+                    "domain:v2fly.org",
+                    "domain:v2ray.com"
+                ],
+                "balancerTag": "balancer:mockbalancer"
+            },
+
+            /****** 3. 基于预定义域名列表的路由策略 ******/
+
+            // https://www.v2fly.org/config/routing.html#%E9%A2%84%E5%AE%9A%E4%B9%89%E5%9F%9F%E5%90%8D%E5%88%97%E8%A1%A8
+
+            // cn 域名走直连
+            {
+                "domainMatcher": "mph",
+                "type": "field",
+                "domains": [
+                    "geosite:cn"
+                ],
+                "outboundTag": "direct"
+            },
+
+            // 常见的外网域名
+            {
+                "domainMatcher": "mph",
+                "type": "field",
+                "domains": [
+                    "geosite:google",
+                    "geosite:facebook",
+                    "geosite:twitter",
+                    "geosite:pixiv",
+                    "geosite:github",
+                    "geosite:medium",
+                    "geosite:golang",
+                    "geosite:wikimedia",
+                    "geosite:reddit",
+                    "gravatar.com",
+                    "imgur.com",
+                    "googletagmanager.com",
+                    "googlesyndication.com"
+                ],
+                "balancerTag": "balancer:mockbalancer"
+            },
+
+            // 屏蔽广告域名
+            {
+                "domainMatcher": "mph",
+                "type": "field",
+                "domains": [
+                    "geosite:category-ads",
+                    "geosite:category-ads-all"
+                ],
+                "outboundTag": "blocked"
+            }
+            /*********************************************/
+        ],
+        "balancers": [
+            {
+                "tag": "balancer:mockbalancer",
+                "selector": [
+                    "outbound:mockouttag1",
+                    "outbound:mockouttag2"
+                ],
+                "strategy": {
+                    "type": "random" // or "leastPing"
+                }
+            }
+        ]
+    },
+    "observatory": {
+        "subjectSelector": [
+            "outbound:mockouttag1",
+            "outbound:mockouttag2"
+        ],
+        "probeURL": "https://api.v2fly.org",
+        "probeInterval": "2h"
+    }
+}
+
+/* Config for server
+{
+    "log":{
+          "loglevel": "info",
+          "access": "/var/log/v2ray/access.log", // 这是 Linux 的路径
+          "error": "/var/log/v2ray/error.log"
+    },
+    "inbounds": [
+      {
+        "port": 54768, // 服务器监听端口
+        "listen": "127.0.0.1", // 只监听127.0.0.1，避免除本机外的机器探测到开放了 10000 端口
+        "protocol": "vmess",    // 主传入协议
+        "settings": {
+          "clients": [
+            {
+              "id": "mock",  // 用户 ID，客户端与服务器必须相同
+  
+              "alterId": 0
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "ws",
+          "wsSettings": {
+          "path": "/mock"
+          }
+        }
+      }
+    ],
+    "outbounds": [
+      {
+        "protocol": "freedom",  // 主传出协议
+        "settings": {}
+      }
+    ]
+  }
+*/

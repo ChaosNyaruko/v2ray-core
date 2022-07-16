@@ -4,6 +4,7 @@ package commander
 
 import (
 	"context"
+	"log"
 	"net"
 	"sync"
 
@@ -84,6 +85,7 @@ func (c *Commander) Start() error {
 		newError("failed to remove existing handler").WriteToLog()
 	}
 
+	log.Print("start a commander: %v", c.tag)
 	return c.ohm.AddHandler(context.Background(), &Outbound{
 		tag:      c.tag,
 		listener: listener,

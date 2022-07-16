@@ -3,6 +3,7 @@ package tcp
 import (
 	"context"
 	gotls "crypto/tls"
+	"log"
 	"strings"
 	"time"
 
@@ -13,6 +14,10 @@ import (
 	"github.com/v2fly/v2ray-core/v5/transport/internet"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/tls"
 )
+
+func init() {
+	log.SetPrefix("mydebug: ")
+}
 
 // Listener is an internet.Listener that listens for TCP connections.
 type Listener struct {
@@ -39,6 +44,7 @@ func ListenTCP(ctx context.Context, address net.Address, port net.Port, streamSe
 	}
 	var listener net.Listener
 	var err error
+	// log.Printf("ListenTCP: addr: %v, family: %v, isdomain: %v", address, address.Family(), address.Family().IsDomain())
 	if address.Family().IsDomain() {
 		listener, err = internet.ListenSystem(ctx, &net.UnixAddr{
 			Name: address.Domain(),
@@ -92,6 +98,7 @@ func ListenTCP(ctx context.Context, address net.Address, port net.Port, streamSe
 func (v *Listener) keepAccepting() {
 	for {
 		conn, err := v.listener.Accept()
+		// log.Printf("v[%v] accept conn: [%v<-%v]", v.Addr(), conn.LocalAddr(), conn.RemoteAddr())
 		if err != nil {
 			errStr := err.Error()
 			if strings.Contains(errStr, "closed") {

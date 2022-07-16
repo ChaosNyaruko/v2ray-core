@@ -4,8 +4,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/v2fly/v2ray-core/v5/common/platform"
 	"github.com/v2fly/v2ray-core/v5/common/signal/done"
 	"github.com/v2fly/v2ray-core/v5/common/signal/semaphore"
@@ -84,10 +86,26 @@ func (l *generalLogger) Close() error {
 }
 
 type consoleLogWriter struct {
-	logger *log.Logger
+	logger           *log.Logger
+	severityDetector *regexp.Regexp
+	routingDetector  *regexp.Regexp
+	isTerminal       bool
 }
 
 func (w *consoleLogWriter) Write(s string) error {
+	if w.isTerminal {
+		if routeIndex := w.routingDetector.FindStringSubmatchIndex(s); len(routeIndex) == 4 {
+			b, e := routeIndex[2], routeIndex[3]
+			r := NewBrush("Custom")(s[b:e])
+			s = s[0:b] + r + s[e:]
+		}
+		matches := w.severityDetector.FindStringSubmatch(s)
+		level := Severity_name[int32(Severity_Info)]
+		if len(matches) >= 2 {
+			level = matches[1]
+		}
+		s = NewBrush(level)(s)
+	}
 	w.logger.Print(s)
 	return nil
 }
@@ -110,21 +128,26 @@ func (w *fileLogWriter) Close() error {
 	return w.file.Close()
 }
 
+func newConsoleLogWriter(w io.Writer) *consoleLogWriter {
+	return &consoleLogWriter{
+		isTerminal:       isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()),
+		logger:           log.New(os.Stdout, "", log.Ldate|log.Ltime),
+		severityDetector: regexp.MustCompile(`^\[(Unknown|Info|Warning|Debug|Error)\]`),
+		routingDetector:  regexp.MustCompile(`(?m):.*[^\[].*(\[.*?\])$`),
+	}
+}
+
 // CreateStdoutLogWriter returns a LogWriterCreator that creates LogWriter for stdout.
 func CreateStdoutLogWriter() WriterCreator {
 	return func() Writer {
-		return &consoleLogWriter{
-			logger: log.New(os.Stdout, "", log.Ldate|log.Ltime),
-		}
+		return newConsoleLogWriter(os.Stdout)
 	}
 }
 
 // CreateStderrLogWriter returns a LogWriterCreator that creates LogWriter for stderr.
 func CreateStderrLogWriter() WriterCreator {
 	return func() Writer {
-		return &consoleLogWriter{
-			logger: log.New(os.Stderr, "", log.Ldate|log.Ltime),
-		}
+		return newConsoleLogWriter(os.Stderr)
 	}
 }
 

@@ -23,6 +23,8 @@ type Instance struct {
 
 // New creates a new log.Instance based on the given config.
 func New(ctx context.Context, config *Config) (*Instance, error) {
+	// default: Access Type1 Level 0
+	//          Error  Type1 Level 2
 	if config.Error == nil {
 		config.Error = &LogSpecification{Type: LogType_Console, Level: log.Severity_Warning}
 	}

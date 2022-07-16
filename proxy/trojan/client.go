@@ -66,6 +66,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		if err != nil {
 			return err
 		}
+		// log.Printf("trojan client.Process: rawConn: [%v->%v]", rawConn.LocalAddr(), rawConn.RemoteAddr())
 
 		conn = rawConn
 		return nil

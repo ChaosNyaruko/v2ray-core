@@ -4,6 +4,7 @@ package dispatcher
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -286,11 +287,16 @@ func sniffer(ctx context.Context, cReader *cachedReader, metadataOnly bool, netw
 
 func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.Link, destination net.Destination) {
 	var handler outbound.Handler
+	isPickRoute := 0
+	routingLink := routing_session.AsRoutingContext(ctx)
+	inTag := routingLink.GetInboundTag()
 
 	if forcedOutboundTag := session.GetForcedOutboundTagFromContext(ctx); forcedOutboundTag != "" {
+		newError("find a forcedOutboundTag: %v", forcedOutboundTag).AtWarning().WriteToLog(session.ExportIDToError(ctx))
 		ctx = session.SetForcedOutboundTagToContext(ctx, "")
 		if h := d.ohm.GetHandler(forcedOutboundTag); h != nil {
-			newError("taking platform initialized detour [", forcedOutboundTag, "] for [", destination, "]").WriteToLog(session.ExportIDToError(ctx))
+			isPickRoute = 1
+			newError("taking platform initialized detour [", forcedOutboundTag, "] for [", destination, "]").AtWarning().WriteToLog(session.ExportIDToError(ctx))
 			handler = h
 		} else {
 			newError("non existing tag for platform initialized detour: ", forcedOutboundTag).AtError().WriteToLog(session.ExportIDToError(ctx))
@@ -299,10 +305,12 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 			return
 		}
 	} else if d.router != nil {
-		if route, err := d.router.PickRoute(routing_session.AsRoutingContext(ctx)); err == nil {
+		newError(fmt.Sprintf("find a router, type: %v", d.router.Type())).AtWarning().WriteToLog(session.ExportIDToError(ctx))
+		if route, err := d.router.PickRoute(routingLink); err == nil {
 			tag := route.GetOutboundTag()
 			if h := d.ohm.GetHandler(tag); h != nil {
-				newError("taking detour [", tag, "] for [", destination, "]").WriteToLog(session.ExportIDToError(ctx))
+				isPickRoute = 2
+				newError("taking detour [", tag, "] for [", destination, "]").AtInfo().WriteToLog((session.ExportIDToError(ctx)))
 				handler = h
 			} else {
 				newError("non existing tag: ", tag).AtWarning().WriteToLog(session.ExportIDToError(ctx))
@@ -314,6 +322,7 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 
 	if handler == nil {
 		handler = d.ohm.GetDefaultHandler()
+		newError("try to get a default handler, tag: ", handler.Tag()).AtInfo().WriteToLog(session.ExportIDToError(ctx))
 	}
 
 	if handler == nil {
@@ -326,12 +335,21 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 	if accessMessage := log.AccessMessageFromContext(ctx); accessMessage != nil {
 		if tag := handler.Tag(); tag != "" {
 			accessMessage.Detour = tag
+			if inTag == "" {
+				accessMessage.Detour = tag
+			} else if isPickRoute == 1 {
+				accessMessage.Detour = inTag + " ==> " + tag
+			} else if isPickRoute == 2 {
+				accessMessage.Detour = inTag + " -> " + tag
+			} else {
+				accessMessage.Detour = inTag + " >> " + tag
+			}
 			if d.policy.ForSystem().OverrideAccessLogDest {
 				accessMessage.To = destination
 			}
 		}
 		log.Record(accessMessage)
-	}
 
+	}
 	handler.Dispatch(ctx, link)
 }
